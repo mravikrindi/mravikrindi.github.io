@@ -3,9 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Expense Tracker</title>
+<title>Spendly — Expense Tracker</title>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
 <style>
   :root {
     --bg:        #F4F6FB;
@@ -20,6 +19,7 @@
     --green-lt:  #EAFAF2;
     --red:       #DC3545;
     --red-lt:    #FFF0F0;
+    --yellow:    #F59E0B;
     --radius:    14px;
     --shadow:    0 1px 3px rgba(20,25,60,.06), 0 4px 14px rgba(20,25,60,.06);
     --font:      'Plus Jakarta Sans', sans-serif;
@@ -46,10 +46,38 @@
   .tab-btn:hover  { background: var(--surface2); color: var(--text); }
   .tab-btn.active { background: var(--accent-lt); color: var(--accent); }
 
+  /* ── SYNC STATUS ── */
+  .sync-bar {
+    display: none; align-items: center; gap: 8px;
+    font-size: 0.75rem; font-weight: 600; color: var(--muted);
+    padding: 6px 14px; border-radius: 20px;
+    background: var(--surface2); border: 1px solid var(--border);
+    transition: all .2s;
+  }
+  .sync-bar.syncing { display: flex; color: var(--accent); background: var(--accent-lt); border-color: #c5d0f5; }
+  .sync-bar.error   { display: flex; color: var(--red);    background: var(--red-lt);    border-color: #f5c5c5; }
+  .sync-bar.success { display: flex; color: var(--green);  background: var(--green-lt);  border-color: #b5e8d0; }
+  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .sync-dot.spin { background: none; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
   /* ── PAGE ── */
   .page { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem 5rem; }
   .tab-content { display: none; }
   .tab-content.active { display: block; animation: fadeUp .25s ease both; }
+
+  /* ── SETUP BANNER ── */
+  .setup-banner {
+    background: #FFFBEB; border: 1.5px solid #FDE68A; border-radius: var(--radius);
+    padding: 1rem 1.25rem; margin-bottom: 1.6rem;
+    font-size: .83rem; color: #92400E; line-height: 1.7;
+  }
+  .setup-banner strong { color: #78350F; font-size: .85rem; }
+  .setup-banner code {
+    background: #FEF3C7; padding: 1px 6px; border-radius: 4px;
+    font-size: .78rem; font-family: monospace;
+  }
+  .setup-banner.hidden { display: none; }
 
   /* ── SUMMARY ── */
   .summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-bottom: 1.75rem; }
@@ -63,13 +91,13 @@
     height: 3px; border-radius: var(--radius) var(--radius) 0 0;
   }
   .s-card.balance::after { background: linear-gradient(90deg, var(--accent), #748FFC); }
-  .s-card.income::after  { background: linear-gradient(90deg, var(--green), #34D399); }
-  .s-card.expense::after { background: linear-gradient(90deg, var(--red), #F87171); }
+  .s-card.income::after  { background: linear-gradient(90deg, var(--green),  #34D399); }
+  .s-card.expense::after { background: linear-gradient(90deg, var(--red),    #F87171); }
   .s-label { font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
   .s-icon  { position: absolute; top: 1.1rem; right: 1.2rem; font-size: 1.3rem; opacity: .15; }
   .s-value { font-family: var(--serif); font-size: 1.9rem; line-height: 1; color: var(--text); }
   .s-card.income  .s-value { color: var(--green); }
-  .s-card.expense .s-value { color: var(--red); }
+  .s-card.expense .s-value { color: var(--red);   }
 
   /* ── MAIN GRID ── */
   .main-grid { display: grid; grid-template-columns: 320px 1fr; gap: 1.25rem; align-items: start; }
@@ -87,8 +115,7 @@
   .type-toggle input[type="radio"] { display: none; }
   .type-toggle label {
     padding: 8px 0; text-align: center; font-size: .8rem; font-weight: 600;
-    color: var(--muted); cursor: pointer; border-radius: 8px;
-    transition: all .18s; user-select: none;
+    color: var(--muted); cursor: pointer; border-radius: 8px; transition: all .18s; user-select: none;
   }
   .type-toggle input#type-expense:checked + label { background: var(--surface); color: var(--red);   box-shadow: 0 1px 4px rgba(0,0,0,.1); }
   .type-toggle input#type-income:checked  + label { background: var(--surface); color: var(--green); box-shadow: 0 1px 4px rgba(0,0,0,.1); }
@@ -97,16 +124,13 @@
   .field label { display: block; font-size: .73rem; font-weight: 600; color: var(--muted); margin-bottom: 5px; }
   .field input, .field select {
     width: 100%; background: var(--surface2); border: 1.5px solid var(--border);
-    border-radius: 9px; padding: 9px 12px; font-family: var(--font);
-    font-size: .875rem; color: var(--text); outline: none;
+    border-radius: 9px; padding: 9px 12px; font-family: var(--font); font-size: .875rem;
+    color: var(--text); outline: none;
     transition: border-color .18s, box-shadow .18s, background .18s;
     -webkit-appearance: none; appearance: none;
   }
   .field input::placeholder { color: var(--muted); }
-  .field input:focus, .field select:focus {
-    border-color: var(--accent); background: var(--surface);
-    box-shadow: 0 0 0 3px rgba(59,91,219,.1);
-  }
+  .field input:focus, .field select:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px rgba(59,91,219,.1); }
   .field input.shake { animation: shake .35s ease; border-color: var(--red) !important; }
 
   .btn-primary {
@@ -117,13 +141,13 @@
   }
   .btn-primary:hover  { opacity: .87; }
   .btn-primary:active { transform: scale(.98); }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
 
   .btn-ghost {
     display: none; width: 100%; margin-top: 7px; padding: 9px;
     background: none; color: var(--muted); border: 1.5px solid var(--border);
-    border-radius: 10px; font-family: var(--font); font-size: .82rem;
-    font-weight: 600; cursor: pointer; transition: all .18s;
-    align-items: center; justify-content: center;
+    border-radius: 10px; font-family: var(--font); font-size: .82rem; font-weight: 600;
+    cursor: pointer; transition: all .18s; align-items: center; justify-content: center;
   }
   .btn-ghost:hover { border-color: var(--red); color: var(--red); background: var(--red-lt); }
 
@@ -159,7 +183,7 @@
   .tx-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .tx-amount { font-family: var(--serif); font-size: 1.05rem; min-width: 72px; text-align: right; }
   .tx-amount.income  { color: var(--green); }
-  .tx-amount.expense { color: var(--red); }
+  .tx-amount.expense { color: var(--red);   }
   .tx-actions { display: flex; gap: 3px; opacity: 0; transition: opacity .15s; }
   .tx-row:hover .tx-actions { opacity: 1; }
   .act-btn {
@@ -174,12 +198,16 @@
   .empty-icon { font-size: 2.2rem; margin-bottom: .6rem; }
   .empty-text { font-size: .85rem; font-weight: 500; }
 
+  /* ── LOADING SKELETON ── */
+  .skeleton { background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 10px; height: 52px; margin-bottom: 6px; }
+  @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
   /* ── CATEGORY MANAGER ── */
   .cat-add-row { display: flex; gap: 8px; margin-bottom: 1.2rem; flex-wrap: wrap; }
   .cat-add-row input {
     flex: 1; min-width: 80px; background: var(--surface2); border: 1.5px solid var(--border);
-    border-radius: 9px; padding: 9px 12px; font-family: var(--font);
-    font-size: .875rem; color: var(--text); outline: none; transition: border-color .18s;
+    border-radius: 9px; padding: 9px 12px; font-family: var(--font); font-size: .875rem;
+    color: var(--text); outline: none; transition: border-color .18s;
   }
   .cat-add-row input::placeholder { color: var(--muted); }
   .cat-add-row input:focus { border-color: var(--accent); background: var(--surface); }
@@ -219,10 +247,14 @@
 <body>
 
 <nav class="topbar">
-  <div class="logo">Track<span>Expenses</span></div>
+  <div class="logo">Spend<span>ly</span></div>
   <div class="tab-nav">
     <button class="tab-btn active" data-tab="dashboard"  onclick="showTab('dashboard')">📊 <span class="tab-label">Dashboard</span></button>
     <button class="tab-btn"        data-tab="categories" onclick="showTab('categories')">🏷️ <span class="tab-label">Categories</span></button>
+  </div>
+  <div class="sync-bar" id="sync-bar">
+    <div class="sync-dot" id="sync-dot"></div>
+    <span id="sync-msg">Syncing…</span>
   </div>
 </nav>
 
@@ -230,6 +262,12 @@
 
   <!-- ═══ DASHBOARD ═══ -->
   <div class="tab-content active" id="tab-dashboard">
+
+    <div class="setup-banner" id="setup-banner">
+      ⚡ <strong>One-time setup needed:</strong> Open this file in a text editor and replace
+      <code>https://script.google.com/macros/s/AKfycbwO6USY_5DJxzmS0gEGElVclELo6CKDIhwMR4A7RT2tiQYoLS1E7uqp-zeHqg9WhcyS/exec</code> near the top of the &lt;script&gt; with your Google Apps Script URL.
+      Follow the setup guide provided with this file.
+    </div>
 
     <div class="summary">
       <div class="s-card balance">
@@ -251,14 +289,12 @@
       <!-- Form -->
       <div class="card" id="form-wrap">
         <div class="card-title" id="form-title">Add Transaction</div>
-
         <div class="type-toggle">
           <input type="radio" name="type" id="type-expense" value="expense" checked />
           <label for="type-expense">🔴 Expense</label>
           <input type="radio" name="type" id="type-income" value="income" />
           <label for="type-income">🟢 Income</label>
         </div>
-
         <div class="field">
           <label for="desc">Description</label>
           <input type="text" id="desc" placeholder="e.g. Grocery run, Freelance payment…" maxlength="80" />
@@ -275,7 +311,6 @@
           <label for="date">Date</label>
           <input type="date" id="date" />
         </div>
-
         <button class="btn-primary" id="submit-btn" onclick="addOrUpdate()">Add Transaction</button>
         <button class="btn-ghost"   id="cancel-btn" onclick="cancelEdit()">✕ Cancel Edit</button>
       </div>
@@ -285,7 +320,7 @@
         <div class="card">
           <div class="card-title">Transaction History</div>
           <div class="filters">
-            <input  type="text" id="search"      placeholder="🔍 Search…"      oninput="renderList()" />
+            <input  type="text" id="search"      placeholder="🔍 Search…"  oninput="renderList()" />
             <select id="filter-type" onchange="renderList()">
               <option value="all">All Types</option>
               <option value="income">Income</option>
@@ -294,19 +329,20 @@
             <select id="filter-cat" onchange="renderList()"></select>
           </div>
           <div id="tx-list">
-            <div class="empty"><div class="empty-icon">💸</div><div class="empty-text">No transactions yet</div></div>
+            <div class="skeleton"></div>
+            <div class="skeleton" style="opacity:.6"></div>
+            <div class="skeleton" style="opacity:.3"></div>
           </div>
         </div>
       </div>
-
     </div>
   </div>
 
   <!-- ═══ CATEGORIES ═══ -->
   <div class="tab-content" id="tab-categories">
-    <div class="card" style="max-width: 580px;">
+    <div class="card" style="max-width:580px;">
       <div class="card-title">Manage Categories</div>
-      <p style="font-size:.82rem;color:var(--muted);margin-bottom:1.1rem;line-height:1.6;">Add or remove categories used when logging transactions.</p>
+      <p style="font-size:.82rem;color:var(--muted);margin-bottom:1.1rem;line-height:1.6;">Add or remove categories. Changes are saved to your Google Sheet instantly.</p>
       <div class="cat-add-row">
         <input type="text" id="new-cat-emoji" placeholder="😀" maxlength="4" />
         <input type="text" id="new-cat-name"  placeholder="Category name…" maxlength="30" />
@@ -319,35 +355,75 @@
 </div>
 
 <script>
-  const DEFAULT_CATEGORIES = [
-    { id: "food",          emoji: "🍔", name: "Food & Dining" },
-    { id: "transport",     emoji: "🚗", name: "Transport" },
-    { id: "shopping",      emoji: "🛍️", name: "Shopping" },
-    { id: "bills",         emoji: "💡", name: "Bills & Utilities" },
-    { id: "health",        emoji: "🏥", name: "Health" },
-    { id: "entertainment", emoji: "🎬", name: "Entertainment" },
-    { id: "salary",        emoji: "💼", name: "Salary" },
-    { id: "other",         emoji: "📦", name: "Other" }
-  ];
+  // ─────────────────────────────────────────────────────────
+  //  PASTE YOUR GOOGLE APPS SCRIPT URL BELOW (between the quotes)
+  //  It looks like: https://script.google.com/macros/s/ABC.../exec
+  // ─────────────────────────────────────────────────────────
+  const SCRIPT_URL = "YOUR_SCRIPT_URL_HERE";
+  // ─────────────────────────────────────────────────────────
 
-  /* ── STATE (localStorage) ── */
-  function load(key, fallback) {
-    try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
-  }
-  function save(key, val) {
-    localStorage.setItem(key, JSON.stringify(val));
-  }
-
-  let transactions = load("sp_transactions", []);
-  let categories   = load("sp_categories", DEFAULT_CATEGORIES);
+  let transactions = [];
+  let categories   = [];
   let editingId    = null;
+  let saving       = false;
 
   /* ── INIT ── */
   document.getElementById("date").valueAsDate = new Date();
-  renderCategorySelects();
-  renderCategoryManager();
-  updateSummary();
-  renderList();
+  if (SCRIPT_URL === "YOUR_SCRIPT_URL_HERE") {
+    document.getElementById("setup-banner").classList.remove("hidden");
+  } else {
+    document.getElementById("setup-banner").classList.add("hidden");
+    loadAll();
+  }
+
+  /* ── API ── */
+  async function api(params) {
+    const isGet = params.action === "getAll" || params.action === "getCategories";
+    if (isGet) {
+      const url = SCRIPT_URL + "?action=" + params.action;
+      const res = await fetch(url);
+      return res.json();
+    } else {
+      const res = await fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify(params)
+      });
+      return res.json();
+    }
+  }
+
+  async function loadAll() {
+    syncStatus("syncing", "Loading…");
+    try {
+      const [txRes, catRes] = await Promise.all([
+        api({ action: "getAll" }),
+        api({ action: "getCategories" })
+      ]);
+      if (txRes.ok)  transactions = txRes.data;
+      if (catRes.ok) categories   = catRes.data;
+      renderCategorySelects();
+      renderCategoryManager();
+      updateSummary();
+      renderList();
+      syncStatus("success", "Synced ✓");
+      setTimeout(() => syncStatus("hide"), 2000);
+    } catch(e) {
+      syncStatus("error", "Could not connect");
+      renderList();
+    }
+  }
+
+  /* ── SYNC STATUS ── */
+  function syncStatus(state, msg) {
+    const bar  = document.getElementById("sync-bar");
+    const dot  = document.getElementById("sync-dot");
+    const text = document.getElementById("sync-msg");
+    bar.className = "sync-bar";
+    if (state === "hide") return;
+    bar.classList.add(state);
+    dot.className = "sync-dot" + (state === "syncing" ? " spin" : "");
+    text.textContent = msg;
+  }
 
   /* ── TABS ── */
   function showTab(tab) {
@@ -358,7 +434,8 @@
   }
 
   /* ── CRUD ── */
-  function addOrUpdate() {
+  async function addOrUpdate() {
+    if (saving) return;
     const desc   = document.getElementById("desc").value.trim();
     const amount = parseFloat(document.getElementById("amount").value);
     const catId  = document.getElementById("category").value;
@@ -372,26 +449,52 @@
     const cat = categories.find(c => c.id === catId) || categories[0];
     const payload = { desc, amount, catId: cat.id, catName: cat.name, catEmoji: cat.emoji, date, type };
 
-    if (editingId) {
-      transactions = transactions.map(t => t.id === editingId ? { ...t, ...payload } : t);
-      cancelEdit();
-    } else {
-      transactions.unshift({ id: Date.now().toString(), ...payload });
-      resetForm();
-    }
+    saving = true;
+    document.getElementById("submit-btn").disabled = true;
+    syncStatus("syncing", "Saving…");
 
-    save("sp_transactions", transactions);
-    updateSummary();
-    renderList();
+    try {
+      if (editingId) {
+        const res = await api({ action: "updateTransaction", data: { ...payload, id: editingId } });
+        if (res.ok) {
+          transactions = transactions.map(t => t.id === editingId ? { ...t, ...payload } : t);
+          cancelEdit();
+        }
+      } else {
+        const res = await api({ action: "addTransaction", data: payload });
+        if (res.ok) {
+          transactions.unshift({ id: res.data.id, ...payload });
+          resetForm();
+        }
+      }
+      updateSummary();
+      renderList();
+      syncStatus("success", "Saved ✓");
+      setTimeout(() => syncStatus("hide"), 2000);
+    } catch(e) {
+      syncStatus("error", "Save failed — check connection");
+    } finally {
+      saving = false;
+      document.getElementById("submit-btn").disabled = false;
+    }
   }
 
-  function deleteTransaction(id) {
+  async function deleteTransaction(id) {
     if (!confirm("Delete this transaction?")) return;
-    transactions = transactions.filter(t => t.id !== id);
-    save("sp_transactions", transactions);
-    if (editingId === id) cancelEdit();
-    updateSummary();
-    renderList();
+    syncStatus("syncing", "Deleting…");
+    try {
+      const res = await api({ action: "deleteTransaction", id });
+      if (res.ok) {
+        transactions = transactions.filter(t => t.id !== id);
+        if (editingId === id) cancelEdit();
+        updateSummary();
+        renderList();
+        syncStatus("success", "Deleted ✓");
+        setTimeout(() => syncStatus("hide"), 2000);
+      }
+    } catch(e) {
+      syncStatus("error", "Delete failed");
+    }
   }
 
   function startEdit(id) {
@@ -411,8 +514,7 @@
   }
 
   function cancelEdit() {
-    editingId = null;
-    resetForm();
+    editingId = null; resetForm();
     document.getElementById("form-title").textContent   = "Add Transaction";
     document.getElementById("submit-btn").textContent   = "Add Transaction";
     document.getElementById("cancel-btn").style.display = "none";
@@ -427,25 +529,34 @@
   }
 
   /* ── CATEGORIES ── */
-  function addCategory() {
+  async function addCategory() {
     const name  = document.getElementById("new-cat-name").value.trim();
     const emoji = document.getElementById("new-cat-emoji").value.trim() || "📌";
     if (!name) return shake("new-cat-name");
     categories.push({ id: "cat_" + Date.now(), emoji, name });
-    save("sp_categories", categories);
-    renderCategorySelects();
-    renderCategoryManager();
     document.getElementById("new-cat-name").value  = "";
     document.getElementById("new-cat-emoji").value = "";
+    await persistCategories();
   }
 
-  function deleteCategory(id) {
+  async function deleteCategory(id) {
     if (categories.length <= 1) return alert("You need at least one category.");
     if (!confirm("Remove this category?")) return;
     categories = categories.filter(c => c.id !== id);
-    save("sp_categories", categories);
+    await persistCategories();
+  }
+
+  async function persistCategories() {
     renderCategorySelects();
     renderCategoryManager();
+    syncStatus("syncing", "Saving categories…");
+    try {
+      await api({ action: "saveCategories", data: categories });
+      syncStatus("success", "Saved ✓");
+      setTimeout(() => syncStatus("hide"), 2000);
+    } catch(e) {
+      syncStatus("error", "Save failed");
+    }
   }
 
   /* ── RENDER ── */
@@ -454,13 +565,13 @@
   }
 
   function updateSummary() {
-    const income  = transactions.filter(t => t.type==="income").reduce((s,t)=>s+t.amount, 0);
-    const expense = transactions.filter(t => t.type==="expense").reduce((s,t)=>s+t.amount, 0);
+    const income  = transactions.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
+    const expense = transactions.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
     const balance = income - expense;
     document.getElementById("balance").textContent       = (balance<0?"−":"") + fmt(balance);
     document.getElementById("total-income").textContent  = fmt(income);
     document.getElementById("total-expense").textContent = fmt(expense);
-    document.getElementById("balance").style.color = balance < 0 ? "var(--red)" : "var(--green)";
+    document.getElementById("balance").style.color = balance<0 ? "var(--red)" : "var(--green)";
   }
 
   function renderCategorySelects() {
@@ -484,11 +595,11 @@
     const catF   = document.getElementById("filter-cat").value;
     const search = document.getElementById("search").value.toLowerCase();
 
-    let data = [...transactions].sort((a,b) => b.date.localeCompare(a.date));
-    if (filter !== "all") data = data.filter(t => t.type === filter);
-    if (catF   !== "all") data = data.filter(t => t.catId === catF);
-    if (search)           data = data.filter(t =>
-      t.desc.toLowerCase().includes(search) || (t.catName||"").toLowerCase().includes(search)
+    let data = [...transactions].sort((a,b)=>b.date.localeCompare(a.date));
+    if (filter!=="all") data = data.filter(t=>t.type===filter);
+    if (catF!=="all")   data = data.filter(t=>t.catId===catF);
+    if (search)         data = data.filter(t=>
+      t.desc.toLowerCase().includes(search)||(t.catName||"").toLowerCase().includes(search)
     );
 
     const list = document.getElementById("tx-list");
@@ -498,12 +609,12 @@
     }
 
     const groups = {};
-    data.forEach(t => { const l = dateLabel(t.date); (groups[l]=groups[l]||[]).push(t); });
+    data.forEach(t=>{ const l=dateLabel(t.date); (groups[l]=groups[l]||[]).push(t); });
 
-    list.innerHTML = Object.entries(groups).map(([lbl, items]) => `
+    list.innerHTML = Object.entries(groups).map(([lbl,items])=>`
       <div class="date-group">
         <div class="date-label">${lbl}</div>
-        ${items.map(t => `
+        ${items.map(t=>`
           <div class="tx-row${editingId===t.id?" editing":""}">
             <div class="tx-cat-icon">${t.catEmoji||"📦"}</div>
             <div class="tx-info">
@@ -522,20 +633,17 @@
   }
 
   function dateLabel(ds) {
-    const d = new Date(ds + "T00:00:00");
-    const today = new Date(); today.setHours(0,0,0,0);
-    const yest  = new Date(today); yest.setDate(yest.getDate()-1);
+    const d=new Date(ds+"T00:00:00"), today=new Date(); today.setHours(0,0,0,0);
+    const yest=new Date(today); yest.setDate(yest.getDate()-1);
     if (d.getTime()===today.getTime()) return "Today";
     if (d.getTime()===yest.getTime())  return "Yesterday";
     return d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"});
   }
 
   function shake(id) {
-    const el = document.getElementById(id);
-    el.classList.remove("shake"); void el.offsetWidth;
-    el.classList.add("shake"); el.focus();
+    const el=document.getElementById(id);
+    el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); el.focus();
   }
-
   function esc(s) {
     return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }

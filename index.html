@@ -277,6 +277,24 @@ body::after {
 .date-range-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: center; }
 .date-range-sep { color: var(--text3); font-size: .75rem; text-align: center; }
 
+.date-filter-toggle {
+  display: flex; align-items: center; gap: 8px;
+  font-size: .78rem; font-weight: 600; color: var(--text2);
+  cursor: pointer; user-select: none; padding: 2px 0;
+}
+.date-filter-toggle input[type="checkbox"] {
+  width: 16px; height: 16px; accent-color: var(--blue);
+  cursor: pointer; margin: 0;
+}
+.filter-actions { display: flex; gap: .6rem; }
+.btn-reset {
+  flex: 1; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 9px 12px;
+  font-family: var(--font); font-size: .8rem; font-weight: 600;
+  color: var(--text2); cursor: pointer; transition: all .2s;
+}
+.btn-reset:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-lt); }
+
 /* ── TX LIST ── */
 .date-group { margin-bottom: 1.25rem; }
 .date-label {
@@ -526,7 +544,7 @@ input.cat-shake { animation: shake .35s ease; border-color: var(--rose) !importa
             </div>
             <div class="field">
               <label for="date">📅 Date</label>
-              <input type="date" id="date" />
+              <input type="date" id="date" onchange="this.blur()" />
             </div>
           </div>
         </div>
@@ -548,7 +566,7 @@ input.cat-shake { animation: shake .35s ease; border-color: var(--rose) !importa
             </div>
             <div class="field">
               <label for="inc-date">📅 Date</label>
-              <input type="date" id="inc-date" />
+              <input type="date" id="inc-date" onchange="this.blur()" />
             </div>
           </div>
         </div>
@@ -573,10 +591,19 @@ input.cat-shake { animation: shake .35s ease; border-color: var(--rose) !importa
               <option value="expense">Expense only</option>
             </select>
             <select id="filter-cat" onchange="renderList()"></select>
-            <div class="date-range-row filter-full">
-              <input type="date" id="filter-from" onchange="renderList()" placeholder="From" title="From date" />
+
+            <label class="date-filter-toggle filter-full">
+              <input type="checkbox" id="enable-date-filter" onchange="toggleDateFilter()" />
+              <span>📅 Filter by date range</span>
+            </label>
+            <div class="date-range-row filter-full" id="date-range-row" style="display:none">
+              <input type="date" id="filter-from" onchange="this.blur(); renderList()" title="From date" />
               <div class="date-range-sep">→</div>
-              <input type="date" id="filter-to"   onchange="renderList()" placeholder="To"   title="To date" />
+              <input type="date" id="filter-to"   onchange="this.blur(); renderList()" title="To date" />
+            </div>
+
+            <div class="filter-actions filter-full">
+              <button class="btn-reset" onclick="resetFilters()">↺ Reset Filters</button>
             </div>
           </div>
 
@@ -663,7 +690,7 @@ input.cat-shake { animation: shake .35s ease; border-color: var(--rose) !importa
 // ─────────────────────────────────────────────────────────
 //  PASTE YOUR GOOGLE APPS SCRIPT URL BELOW
 // ─────────────────────────────────────────────────────────
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw7FLFoQSSHav-eqrVUS1aQw-93h3idzNr27-lC110Paq_zLPaXp-OUzBovnmvFdD69/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzQ7VRLaCUgKN0nNQ9puisONXjxAE559Eq0pQhkwdTMJIgRB_9GYK0UuF_S-pkzmzM8/exec";
 // ─────────────────────────────────────────────────────────
 
 const DEFAULT_EXP_CATS = [
@@ -982,8 +1009,9 @@ function renderList() {
   const filter = document.getElementById("filter-type").value;
   const catF   = document.getElementById("filter-cat").value;
   const search = document.getElementById("search").value.toLowerCase();
-  const from   = document.getElementById("filter-from").value;
-  const to     = document.getElementById("filter-to").value;
+  const dateFilterOn = document.getElementById("enable-date-filter").checked;
+  const from   = dateFilterOn ? document.getElementById("filter-from").value : "";
+  const to     = dateFilterOn ? document.getElementById("filter-to").value   : "";
 
   let data = [...transactions].sort((a,b)=>b.date.localeCompare(a.date));
   if (filter!=="all") data = data.filter(t=>t.type===filter);
@@ -1027,6 +1055,24 @@ function dateLabel(ds) {
   if (d.getTime()===today.getTime()) return "Today";
   if (d.getTime()===yest.getTime())  return "Yesterday";
   return d.toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"});
+}
+
+/* ── FILTER CONTROLS ── */
+function toggleDateFilter() {
+  const enabled = document.getElementById("enable-date-filter").checked;
+  document.getElementById("date-range-row").style.display = enabled ? "grid" : "none";
+  renderList();
+}
+
+function resetFilters() {
+  document.getElementById("search").value = "";
+  document.getElementById("filter-type").value = "all";
+  document.getElementById("filter-cat").value = "all";
+  document.getElementById("enable-date-filter").checked = false;
+  document.getElementById("date-range-row").style.display = "none";
+  document.getElementById("filter-from").value = "";
+  document.getElementById("filter-to").value = "";
+  renderList();
 }
 
 /* ── CHARTS ── */
